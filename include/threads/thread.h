@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -28,6 +29,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+#define MAX_FDT 128
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -104,6 +106,34 @@ struct thread {
 	struct supplemental_page_table spt;
 #endif
 
+	int64_t wake_tick;	
+
+	struct lock *wait_on_lock;
+	struct list donations;
+	struct list_elem d_elem;
+	int origin_priority;
+
+	int nice;
+	int recent_cpu;
+
+	int is_exit; //프로세스 종료 유무
+	//int succ_exit_status; //정상 종료 status
+	
+	struct semaphore wait_sema; //프로세스 wait 세마포어
+	struct semaphore fork_sema; //프로세스 fork 세마포어
+	struct semaphore succ_sema; //프로세스 종료 성공 세마포어
+	
+	struct list child_list; //자식 프로세스 리스트
+	struct list_elem child_elem; //자식 프로세스 리스트 요소
+
+
+	struct file *fdt[MAX_FDT];
+	int next_fd;
+
+	struct file *running_file;
+
+	struct intr_frame parent_if; //부모프로세스 디스크립터 포인트 필드
+
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
@@ -143,4 +173,19 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+void thread_sleep(int64_t start, int64_t ticks);
+void thread_wake(int64_t ticks);
+
+bool cmp_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+bool cmp_wake_ticks (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+bool cmp_doner_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+void thread_change_by_priority(void);
+
+//MLFQS
+void mlfqs_priority(struct thread *t);
+void mlfqs_recent_cpu(struct thread *t);
+void mlfqs_load_avg(void);
+void mlfqs_increment(void);
+void mlfqs_recalc_priority(void);
+void mlfqs_recalc_recent_cpu(void);
 #endif /* threads/thread.h */
