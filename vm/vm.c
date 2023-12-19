@@ -17,6 +17,8 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	list_init(&frame_table->frame_list);
+	frame_table->last_ptr = list_begin(&frame_table->frame_list);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -37,7 +39,10 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
-struct list frame_table;
+struct frame_table{
+	struct list frame_list;
+	struct list_elem *last_ptr;
+} *frame_table;
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
@@ -68,14 +73,16 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	/* TODO: Fill this function. */
 	struct page *dummy_page = (struct page *)malloc(sizeof(struct page));
 	struct hash_elem *dummy_elem;
-	dummy_page->va = va;
+	dummy_page->va = pg_round_down(va);
 	dummy_elem = hash_find(&spt->spt_hash, &dummy_page->hash_elem);
+	
 	free(dummy_page);
-	if(!dummy_elem){
+	
+	if(!dummy_elem)
 		return NULL; 
-	} else {
-		return hash_entry(dummy_elem, struct page, hash_elem);
-	}
+
+	return hash_entry(dummy_elem, struct page, hash_elem);
+	
 }
 
 /* Insert PAGE into spt with validation. */
@@ -106,12 +113,26 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
+	 //clock algorithmn
 	struct list_elem *e;
+	
 	struct thread *now_thread = thread_current();
-	for(e = list_begin(&frame_table), e != list_end(&frame_table); e=list_next(e);){
+	for(e = frame_table->last_ptr, e != list_end(&frame_table->frame_list); e=list_next(e);){
 		victim = list_entry(e, struct frame, frame_elem);
 		if(pml4_is_accessed(now_thread->pml4, victim->page->va)){
-			pml4_set_accessed(now_thread->pml4, victim->page->va, false);
+			pml4_set_accessed(now_thread->pml4, victim->page->va, 0);
+		}else {
+			frame_table->last_ptr = e;
+			return victim;
+		}
+	}
+
+	for(e = list_begin(&frame_table->frame_list), e != list_end(&frame_table->frame_list); e=list_next(e);){
+		victim = list_entry(e, struct frame, frame_elem);
+		if(pml4_is_accessed(now_thread->pml4, victim->page->va)){
+			pml4_set_accessed(now_thread->pml4, victim->page->va, 0);
+		} else {
+			frame_table->last_ptr = e;
 			return victim;
 		}
 	}
@@ -193,6 +214,10 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
+	page = spt_find_page(&thread_current()->spt, va);
+	if(page == NULL){
+		return false;
+	}
 
 	return vm_do_claim_page (page);
 }
