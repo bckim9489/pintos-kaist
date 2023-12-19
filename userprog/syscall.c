@@ -163,6 +163,7 @@ exec (const char *cmd_line) {
 	char *fn_copy;
 	int dst_len = strlen(cmd_line)+1;
 	fn_copy = palloc_get_page (PAL_ZERO);
+	
 	if (fn_copy == NULL){
 		//palloc_free_page(fn_copy);
 		exit(-1);
@@ -195,8 +196,9 @@ remove (const char *file) {
 
 int
 open (const char *file) {
-	if (!file)
+	if (!file){
 		exit(-1);
+	}
 	lock_acquire(&filesys_lock);
 	int fd;
 	check_address(file);
@@ -208,8 +210,9 @@ open (const char *file) {
 
 	fd = process_add_file(curr_file);
 
-	if(fd == -1)
+	if(fd == -1){
 		file_close(curr_file);
+	}
 	lock_release(&filesys_lock);
 	return fd;
 }

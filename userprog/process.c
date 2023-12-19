@@ -34,7 +34,7 @@ process_init (void) {
 	struct thread *current = thread_current ();
 }
 struct thread *get_child_process(int pid);
-
+struct lock process_lock;
 /* Starts the first userland program, called "initd", loaded from FILE_NAME.
  * The new thread may be scheduled (and may even exit)
  * before process_create_initd() returns. Returns the initd's
@@ -45,7 +45,7 @@ process_create_initd (const char *file_name) {
 	char *fn_copy;
 	char *save_ptr;
 	tid_t tid;
-
+	lock_init(&process_lock);
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page (0);
@@ -87,6 +87,7 @@ process_fork (const char *name, struct intr_frame *if_ ) {
 
 	
 	tid = thread_create (name, PRI_DEFAULT, __do_fork, thread_current ());
+	
 	
 	if(tid == TID_ERROR)
 		return -1;
@@ -246,7 +247,9 @@ process_exec (void *f_name) {
 	process_cleanup ();
 
 	/* And then load the binary */
+	lock_acquire(&process_lock);
 	success = load (file_name, &_if);
+	lock_release(&process_lock);
 	//hex_dump(_if.rsp , _if.rsp, (USER_STACK-_if.rsp), true);
 
 	palloc_free_page (file_name);
@@ -313,7 +316,7 @@ int
 process_wait (tid_t child_tid UNUSED) {
 	int result;
 	struct thread *child_thread = get_child_process(child_tid);
-	 
+	//printf("----------%s : %d\n", child_thread->name, child_thread->tid);
 	if(!child_thread)
 		return -1;
 	
@@ -353,6 +356,7 @@ process_exit (void) {
 		close(i);
 	}
 
+	
 	if(!list_empty(&curr->child_list)){
 		while(!list_empty(&curr->child_list)){
 			struct list_elem *child_elem = list_pop_front(&curr->child_list);
@@ -361,9 +365,9 @@ process_exit (void) {
 		}
 	}
 	
-	process_cleanup ();
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->succ_sema);
+	process_cleanup ();
 }
 
 /* Free the current process's resources. */
@@ -495,7 +499,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
+	lock_acquire(&filesys_lock);
 	file = filesys_open (file_name);
+	lock_release(&filesys_lock);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
