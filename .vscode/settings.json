@@ -23,6 +23,8 @@
         "directory.h": "c",
         "tss.h": "c",
         "*.inc": "c",
-        "fixed_point.h": "c"
+        "fixed_point.h": "c",
+        "hash.h": "c",
+        "inspect.h": "c"
     }
 }
