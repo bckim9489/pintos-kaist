@@ -117,7 +117,6 @@ struct thread {
 	int recent_cpu;
 
 	int is_exit; //프로세스 종료 유무
-	//int succ_exit_status; //정상 종료 status
 	
 	struct semaphore wait_sema; //프로세스 wait 세마포어
 	struct semaphore fork_sema; //프로세스 fork 세마포어
