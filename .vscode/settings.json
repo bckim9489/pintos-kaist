@@ -25,6 +25,12 @@
         "*.inc": "c",
         "fixed_point.h": "c",
         "hash.h": "c",
-        "inspect.h": "c"
+        "inspect.h": "c",
+        "vm.h": "c",
+        "intrinsic.h": "c",
+        "gdt.h": "c",
+        "inttypes.h": "c",
+        "stdbool.h": "c",
+        "lib.h": "c"
     }
 }

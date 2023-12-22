@@ -59,9 +59,20 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
 	thread_exit ();
 	*/
+	#ifdef VM
+    thread_current()->rsp = f->rsp; // 추가
+	#endif
 
 	switch (f->R.rax)
 	{
+	#ifdef VM
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
+	#endif
 	case SYS_HALT:
 	 	/* return void */
 		halt ();
@@ -147,7 +158,6 @@ exit (int status) {
 	struct thread *curr = thread_current();
 	curr->is_exit = status;
 	printf ("%s: exit(%d)\n", curr->name, curr->is_exit);
-
 	thread_exit();
 }
 
@@ -175,6 +185,7 @@ exec (const char *cmd_line) {
 		//palloc_free_page(fn_copy);
 		return -1;
 	}
+	
 }
 
 int
@@ -328,3 +339,29 @@ void check_address(void *addr){
 	if(pml4e_walk(thread_current()->pml4, addr, false) == NULL)
 		exit(-1);
 }
+
+#ifdef VM
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+    if (offset % PGSIZE != 0){
+        return NULL;
+    }
+    if(pg_round_down(addr) != addr || is_kernel_vaddr(addr) || addr == NULL || (long long)length <=0)
+        return NULL;
+    if(fd == 0 || fd == 1)
+        exit(-1);
+    if(spt_find_page(&thread_current()->spt, addr))
+        return NULL;
+
+    struct file *target = process_get_file(fd);
+    if(target == NULL)
+        return NULL;
+
+    void *ret = do_mmap(addr, length, writable, target, offset);
+
+    return ret;
+}
+
+void munmap(void *addr){
+    do_munmap(addr);
+}
+#endif

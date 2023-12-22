@@ -741,8 +741,10 @@ thread_change_by_priority(void){
 		struct list_elem *ready_node = list_begin(&ready_list);
 		struct thread *first_thread = list_entry(ready_node, struct thread, elem);
 
-		if(first_thread->priority > now_thread->priority){
-			thread_yield();
+		if(first_thread->priority > now_thread->priority ){
+			if (!intr_context()) {
+				thread_yield();
+			}
 		}
 	}
 }

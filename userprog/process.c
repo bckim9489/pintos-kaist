@@ -57,6 +57,7 @@ process_create_initd (const char *file_name) {
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -70,7 +71,6 @@ initd (void *f_name) {
 #endif
 
 	process_init ();
-
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -242,7 +242,6 @@ process_exec (void *f_name) {
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
-
 	/* We first kill the current context */
 	process_cleanup ();
 
@@ -251,13 +250,11 @@ process_exec (void *f_name) {
 	success = load (file_name, &_if);
 	lock_release(&process_lock);
 	//hex_dump(_if.rsp , _if.rsp, (USER_STACK-_if.rsp), true);
-
 	palloc_free_page (file_name);
 	/* If load failed, quit. */
 	if (!success){
 		return -1;
 	}
-	
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -316,11 +313,11 @@ int
 process_wait (tid_t child_tid UNUSED) {
 	int result;
 	struct thread *child_thread = get_child_process(child_tid);
-	//printf("----------%s : %d\n", child_thread->name, child_thread->tid);
+	
 	if(!child_thread)
 		return -1;
 	
-	
+
 	sema_down(&child_thread->wait_sema);
 	result = child_thread->is_exit;
 	list_remove(&child_thread->child_elem);
@@ -346,6 +343,7 @@ struct thread *get_child_process(int pid){
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
@@ -491,13 +489,11 @@ load (const char *file_name, struct intr_frame *if_) {
 		argv[argc] = token;
 		argc++;
 	}
-
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
-
 	/* Open executable file. */
 	lock_acquire(&filesys_lock);
 	file = filesys_open (file_name);
@@ -522,6 +518,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
+	
 	/* Read program headers. */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++) {
@@ -534,6 +531,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
 		file_ofs += sizeof phdr;
+		
 		switch (phdr.p_type) {
 			case PT_NULL:
 			case PT_NOTE:
@@ -574,22 +572,23 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
+	
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
-
+	
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
 	//void argument_stack(char **parse ,int count ,struct intr_frame *if) struct intr_frame로 변경
 	argument_stack(argv, argc, if_);
-
+	
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
 	//file_close (file);
+	
 	return success;
 }
 
@@ -666,7 +665,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
@@ -742,11 +740,24 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-static bool
+bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct lazy_load_arg *lazy_load_arg = (struct lazy_load_arg *)aux;
+
+	file_seek(lazy_load_arg->file, lazy_load_arg->ofs);
+
+	if (file_read(lazy_load_arg->file, page->frame->kva, lazy_load_arg->read_bytes) != (int)(lazy_load_arg->read_bytes))
+	{
+		palloc_free_page(page->frame->kva);
+		return false;
+	}
+
+	memset(page->frame->kva + lazy_load_arg->read_bytes, 0, lazy_load_arg->zero_bytes);
+
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -776,17 +787,22 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
+		struct lazy_load_arg *lazy_load_arg = (struct lazy_load_arg *)malloc(sizeof(struct lazy_load_arg));
+		lazy_load_arg->file = file;					
+		lazy_load_arg->ofs = ofs;					
+		lazy_load_arg->read_bytes = page_read_bytes;
+		lazy_load_arg->zero_bytes = page_zero_bytes;
+		
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable, lazy_load_segment, lazy_load_arg)){
 			return false;
-
+		}
+		
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -801,7 +817,13 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-
+	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1))
+	{
+		success = vm_claim_page(stack_bottom);
+		
+		if (success)
+			if_->rsp = USER_STACK;
+	}
 	return success;
 }
 #endif /* VM */

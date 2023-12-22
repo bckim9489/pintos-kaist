@@ -14,7 +14,6 @@ test_main (void)
 {
   pid_t child[CHILD_CNT];
   size_t i;
-  
 	/* Spawn children */
     for(i =0; i < CHILD_CNT; i++) {
 	  child[i] = fork("child-swap");

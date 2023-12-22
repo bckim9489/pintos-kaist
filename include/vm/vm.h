@@ -2,7 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
-#include <kernel/hash.h>
+#include "kernel/hash.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -48,8 +48,8 @@ struct page {
 
 	/* Your implementation */
 	struct hash_elem hash_elem;
-	uint64_t writable;
-
+	int mapped_page_count;
+	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -66,7 +66,6 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
-	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
@@ -90,7 +89,6 @@ struct page_operations {
  * All designs up to you for this. */
 struct supplemental_page_table {
 	struct hash spt_hash;
-
 };
 
 #include "threads/thread.h"
@@ -114,7 +112,7 @@ bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
 void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
-unsigned page_hash (const struct hash_elem *page, void *aux UNUSED);
-static unsigned vm_hash_func (const struct hash_elem *e, void *aux);
-static bool vm_less_func (const struct hash_elem *a, const struct hash_elem *b);
+bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
+unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
+void spt_destructor(struct hash_elem *e, void *aux);
 #endif  /* VM_VM_H */
