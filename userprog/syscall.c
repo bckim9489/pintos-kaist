@@ -17,7 +17,6 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
-
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -60,7 +59,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	thread_exit ();
 	*/
 	#ifdef VM
-    thread_current()->rsp = f->rsp; // 추가
+    thread_current()->rsp = f->rsp;
 	#endif
 
 	switch (f->R.rax)
@@ -178,13 +177,14 @@ exec (const char *cmd_line) {
 		//palloc_free_page(fn_copy);
 		exit(-1);
 	}
-	
 	memcpy(fn_copy, cmd_line, dst_len);
 	
 	if (process_exec (fn_copy) < 0){
 		//palloc_free_page(fn_copy);
 		return -1;
 	}
+	
+	
 	
 }
 
@@ -239,7 +239,7 @@ filesize (int fd) {
 
 int
 read (int fd, void *buffer, unsigned size) {
-	check_address(buffer);
+	check_valid_buffer(buffer, size, true);
 	lock_acquire(&filesys_lock);
 	if(fd == 1){
 		lock_release(&filesys_lock);
@@ -274,7 +274,7 @@ read (int fd, void *buffer, unsigned size) {
 
 int
 write (int fd, const void *buffer, unsigned size) {
-	check_address(buffer);
+	check_valid_buffer(buffer, size, false);
 	lock_acquire(&filesys_lock);
 
 	int result;
@@ -335,9 +335,31 @@ dup2 (int oldfd, int newfd){
 */
 //-----------extra-----------------------------
 
-void check_address(void *addr){
-	if(pml4e_walk(thread_current()->pml4, addr, false) == NULL)
+struct page *check_address(void *addr){
+#ifdef VM
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+
+	if (!addr || !(is_user_vaddr(addr)) || !page) {
 		exit(-1);
+	}
+	
+	return page;
+#else
+	if (addr = NULL || !(is_user_vaddr(addr)) || pml4_get_page(thread_current()->pml4, addr) == NULL)
+	{
+		exit(-1);
+	}
+#endif
+}
+
+void check_valid_buffer (void *buffer, unsigned size, bool is_read) {
+	for (char i = 0; i < size; i++) {
+		struct page *page = check_address(buffer + i);
+		
+		if (is_read && !page->writable) {
+			exit(-1);
+		}
+	}
 }
 
 #ifdef VM

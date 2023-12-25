@@ -7,7 +7,7 @@
 
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_);
-struct lazy_load_arg{
+struct container{
     struct file *file;
     off_t ofs;
     size_t read_bytes;

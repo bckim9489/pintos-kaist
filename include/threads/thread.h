@@ -105,6 +105,7 @@ struct thread {
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 	void *rsp;
+	void *stack_bottom;
 #endif
 
 	int64_t wake_tick;	

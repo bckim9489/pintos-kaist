@@ -2,7 +2,9 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
-#include "kernel/hash.h"
+#include "lib/kernel/hash.h"
+#include "threads/vaddr.h"
+#include "threads/mmu.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -66,6 +68,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.
@@ -115,4 +118,7 @@ enum vm_type page_get_type (struct page *page);
 bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
 unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
 void spt_destructor(struct hash_elem *e, void *aux);
+void *undo_mmap(void *initial_addr, void *addr);
+bool insert_page(struct hash *pages, struct page *p);
+bool delete_page(struct hash *pages, struct page *p);
 #endif  /* VM_VM_H */
